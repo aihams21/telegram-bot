@@ -3,7 +3,6 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes
 
 TOKEN = os.getenv("TOKEN")
-
 # إنشاء لوحة اللعب
 def create_board(board):
     keyboard = []
