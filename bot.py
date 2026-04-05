@@ -1,98 +1,73 @@
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-
-import os
-import platform
+import random
 import datetime
-import subprocess
 
 TOKEN = "7664216240:AAH1iDWhT5JhwpdPd-AnEEkSSwZLD5ZVin0"
 # /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔥 البوت جاهز للتحكم!")
+    await update.message.reply_text("🔥 أهلاً في البوت الذكي 😏 اكتب /help")
 
-# /info
-async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    data = f"""
-🖥️ System: {platform.system()}
-💻 Name: {platform.node()}
-⚙️ CPU: {platform.processor()}
+# /help
+async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = """
+🤖 الأوامر:
+
+/time ⏰ الوقت
+/joke 😂 نكتة
+/wisdom 🧠 حكمة
+/azkar 🕌 أذكار
+/game 🎮 لعبة رقم
 """
-    await update.message.reply_text(data)
+    await update.message.reply_text(msg)
 
 # /time
 async def time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     now = datetime.datetime.now()
     await update.message.reply_text(f"⏰ {now}")
 
-# /files
-async def files(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    path = os.path.join(os.path.expanduser("~"), "Desktop")
-    files = os.listdir(path)
-    msg = "\n".join(files[:20])
-    await update.message.reply_text(msg)
+# /joke
+async def joke(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    jokes = [
+        "😂 واحد غبي فتح محل سماه مغلق دائمًا",
+        "😂 واحد راح للدكتور قاله كل ما أشرب قهوة بوجعني عيني قاله شيل الملعقة",
+        "😂 واحد اتزوج مدرسه، صار كل يوم عنده امتحان"
+    ]
+    await update.message.reply_text(random.choice(jokes))
 
-# 📂 /send file.txt
-async def send_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("❌ اكتب اسم الملف")
-        return
+# /wisdom
+async def wisdom(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    wisdoms = [
+        "🧠 لا تؤجل عمل اليوم إلى الغد",
+        "🧠 من جد وجد ومن زرع حصد",
+        "🧠 النجاح يحتاج صبر"
+    ]
+    await update.message.reply_text(random.choice(wisdoms))
 
-    filename = " ".join(context.args)
-    path = os.path.join(os.path.expanduser("~"), "Desktop", filename)
+# /azkar
+async def azkar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    azkar_list = [
+        "🕌 سبحان الله",
+        "🕌 الحمد لله",
+        "🕌 لا إله إلا الله",
+        "🕌 الله أكبر"
+    ]
+    await update.message.reply_text(random.choice(azkar_list))
 
-    if os.path.exists(path):
-        await update.message.reply_document(document=open(path, 'rb'))
-    else:
-        await update.message.reply_text("❌ الملف غير موجود")
-
-# 🌐 /ping
-async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        result = subprocess.check_output("ping google.com", shell=True)
-        await update.message.reply_text("🌐 النت شغال!")
-    except:
-        await update.message.reply_text("❌ ما في اتصال")
-
-# ⚡ /run dir
-async def run_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("❌ اكتب أمر")
-        return
-
-    cmd = " ".join(context.args)
-
-    try:
-        result = subprocess.check_output(cmd, shell=True)
-        await update.message.reply_text(result.decode()[:4000])
-    except:
-        await update.message.reply_text("❌ فشل التنفيذ")
-
-# 📂 /openfile file.txt
-async def open_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("❌ اكتب اسم الملف")
-        return
-
-    filename = " ".join(context.args)
-    path = os.path.join(os.path.expanduser("~"), "Desktop", filename)
-
-    if os.path.exists(path):
-        os.startfile(path)
-        await update.message.reply_text("📂 تم فتح الملف")
-    else:
-        await update.message.reply_text("❌ الملف غير موجود")
+# 🎮 لعبة رقم
+async def game(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    num = random.randint(1, 10)
+    await update.message.reply_text(f"🎮 خمن رقم بين 1 و 10: {num}")
 
 # تشغيل
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("info", info))
+app.add_handler(CommandHandler("help", help_cmd))
 app.add_handler(CommandHandler("time", time))
-app.add_handler(CommandHandler("files", files))
-app.add_handler(CommandHandler("send", send_file))
-app.add_handler(CommandHandler("ping", ping))
-app.add_handler(CommandHandler("run", run_cmd))
-app.add_handler(CommandHandler("openfile", open_file))
+app.add_handler(CommandHandler("joke", joke))
+app.add_handler(CommandHandler("wisdom", wisdom))
+app.add_handler(CommandHandler("azkar", azkar))
+app.add_handler(CommandHandler("game", game))
 
 app.run_polling()
