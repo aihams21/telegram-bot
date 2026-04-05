@@ -1,81 +1,172 @@
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
-import random
-import datetime
 import os
-from flask import Flask
-import threading
+import random
+import json
+import time
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 TOKEN = os.getenv("TOKEN")
+DATA_FILE = "players.json"
 
-# 🌐 Flask (عشان Render)
-app_web = Flask(__name__)
+# تحميل البيانات
+def load_data():
+    try:
+        with open(DATA_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return {}
 
-@app_web.route('/')
-def home():
-    return "Bot is running 🔥"
+# حفظ البيانات
+def save_data(data):
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f)
 
-def run_web():
-    app_web.run(host='0.0.0.0', port=10000)
+# إنشاء لاعب
+def get_player(user_id):
+    data = load_data()
+    uid = str(user_id)
 
-# ❤️ ثابت
-def love(msg):
-    return msg + "\n\n❤️ بحبك مريم"
+    if uid not in data:
+        data[uid] = {
+            "points": 0,
+            "coins": 0,
+            "last_daily": 0
+        }
+        save_data(data)
 
-# 💌 حب
-love_msgs = [
-    "💌 أنتِ أجمل شي بحياتي",
-    "💌 بدونك الحياة ما إلها طعم",
-    "💌 ضحكتك تسوى الدنيا",
-    "💌 والله إني بحبك حب مو طبيعي",
-    "💌 أنتِ الأمان ❤️"
-]
+    return data
 
-# 🤖 AI بسيط
-def ai_reply(text):
-    text = text.lower()
-    if "كيفك" in text:
-        return "تمام دامك معي ❤️"
-    elif "بحبك" in text:
-        return "وأنا أموت فيك 😏❤️"
-    else:
-        return "احكي أكثر 😏"
+# ليفل
+def level(points):
+    return points // 20
 
 # /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(love("🔥 أهلاً في بوت الحب 😏"))
+    await update.message.reply_text(
+        "🎮 أهلاً في لعبة التحدي!\nاستخدم /play للبدء"
+    )
 
-# /love
-async def love_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(love(random.choice(love_msgs)))
+# 🎮 لعب
+async def play(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.message.from_user
+    data = get_player(user.id)
 
-# /joke
-async def joke(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    jokes = [
-        "😂 واحد فتح محل سماه مغلق دائمًا",
-        "😂 واحد شرب قهوة ووجعته عينه طلع في ملعقة"
-    ]
-    await update.message.reply_text(love(random.choice(jokes)))
+    win = random.choice([True, False])
 
-# /dice
-async def dice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(love(f"🎲 {random.randint(1,6)}"))
+    if win:
+        p = random.randint(3, 7)
+        c = random.randint(2, 5)
+        data[str(user.id)]["points"] += p
+        data[str(user.id)]["coins"] += c
+        msg = f"🔥 فزت!\n+{p} نقاط\n+{c} عملة"
+    else:
+        msg = "❌ خسرت!"
 
-# 🤖 رد على أي رسالة
-async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    reply = ai_reply(update.message.text)
-    await update.message.reply_text(love(reply))
+    save_data(data)
 
-# تشغيل Flask بالخلفية
-threading.Thread(target=run_web).start()
+    pts = data[str(user.id)]["points"]
+    lvl = level(pts)
 
-# تشغيل البوت
+    await update.message.reply_text(
+        f"{msg}\n\n💰 نقاط: {pts}\n🪙 عملة: {data[str(user.id)]['coins']}\n⭐ ليفل: {lvl}"
+    )
+
+# 🧠 مهمة يومية
+async def daily(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.message.from_user
+    data = get_player(user.id)
+
+    now = time.time()
+    last = data[str(user.id)]["last_daily"]
+
+    if now - last < 86400:
+        await update.message.reply_text("❌ رجع بكرا")
+        return
+
+    data[str(user.id)]["coins"] += 20
+    data[str(user.id)]["last_daily"] = now
+    save_data(data)
+
+    await update.message.reply_text("🎁 أخذت 20 عملة!")
+
+# 🎁 صندوق
+async def box(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.message.from_user
+    data = get_player(user.id)
+
+    if data[str(user.id)]["coins"] < 10:
+        await update.message.reply_text("❌ تحتاج 10 عملات")
+        return
+
+    data[str(user.id)]["coins"] -= 10
+    reward = random.randint(5, 20)
+    data[str(user.id)]["points"] += reward
+    save_data(data)
+
+    await update.message.reply_text(
+        f"🎁 حصلت على {reward} نقاط!"
+    )
+
+# ⚔️ قتال
+async def fight(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.message.from_user
+    data = get_player(user.id)
+
+    win = random.choice([True, False])
+
+    if win:
+        reward = random.randint(5, 15)
+        data[str(user.id)]["points"] += reward
+        msg = f"⚔️ فزت!\n+{reward} نقاط"
+    else:
+        msg = "💀 خسرت القتال!"
+
+    save_data(data)
+    await update.message.reply_text(msg)
+
+# 🏪 متجر
+async def shop(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🏪 المتجر:\n🎁 صندوق = 10 عملات\nاستخدم /box"
+    )
+
+# 👤 معلوماتك
+async def me(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.message.from_user
+    data = get_player(user.id)
+
+    pts = data[str(user.id)]["points"]
+    lvl = level(pts)
+
+    await update.message.reply_text(
+        f"👤 {user.first_name}\n💰 نقاط: {pts}\n🪙 عملة: {data[str(user.id)]['coins']}\n⭐ ليفل: {lvl}"
+    )
+
+# 🏆 ترتيب
+async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    data = load_data()
+
+    sorted_players = sorted(
+        data.items(), key=lambda x: x[1]["points"], reverse=True
+    )
+
+    msg = "🏆 الترتيب:\n"
+
+    for i, (_, info) in enumerate(sorted_players[:5], start=1):
+        msg += f"{i}. {info['points']} نقطة\n"
+
+    await update.message.reply_text(msg)
+
+# تشغيل
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("love", love_cmd))
-app.add_handler(CommandHandler("joke", joke))
-app.add_handler(CommandHandler("dice", dice))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
+app.add_handler(CommandHandler("play", play))
+app.add_handler(CommandHandler("daily", daily))
+app.add_handler(CommandHandler("box", box))
+app.add_handler(CommandHandler("fight", fight))
+app.add_handler(CommandHandler("shop", shop))
+app.add_handler(CommandHandler("me", me))
+app.add_handler(CommandHandler("top", top))
 
 app.run_polling()
