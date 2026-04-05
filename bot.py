@@ -1,29 +1,11 @@
 import os
-import json
-import random
+import uuid
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes
 
 TOKEN = os.getenv("TOKEN")
-DATA_FILE = "players.json"
 
-# تحميل/حفظ
-def load():
-    try:
-        return json.load(open(DATA_FILE))
-    except:
-        return {}
-
-def save(data):
-    json.dump(data, open(DATA_FILE, "w"))
-
-def get_player(uid):
-    data = load()
-    uid = str(uid)
-    if uid not in data:
-        data[uid] = {"points": 0}
-        save(data)
-    return data
+games = {}
 
 # 🎨 لوحة
 def board_ui(b):
@@ -39,129 +21,131 @@ def board_ui(b):
          InlineKeyboardButton(b[8], callback_data="8")]
     ])
 
-# فوز
 def win(b):
-    c = [(0,1,2),(3,4,5),(6,7,8),
-         (0,3,6),(1,4,7),(2,5,8),
-         (0,4,8),(2,4,6)]
+    c=[(0,1,2),(3,4,5),(6,7,8),
+       (0,3,6),(1,4,7),(2,5,8),
+       (0,4,8),(2,4,6)]
     for x,y,z in c:
         if b[x]==b[y]==b[z] and b[x]!="⬜":
             return b[x]
     return None
 
-# 🧠 Minimax (hard)
-def minimax(b, is_max):
-    w = win(b)
-    if w=="⭕": return 1
-    if w=="❌": return -1
-    if "⬜" not in b: return 0
-
-    if is_max:
-        best=-999
-        for i in range(9):
-            if b[i]=="⬜":
-                b[i]="⭕"
-                best=max(best,minimax(b,False))
-                b[i]="⬜"
-        return best
-    else:
-        best=999
-        for i in range(9):
-            if b[i]=="⬜":
-                b[i]="❌"
-                best=min(best,minimax(b,True))
-                b[i]="⬜"
-        return best
-
-def best_move(b):
-    best=-999
-    move=0
-    for i in range(9):
-        if b[i]=="⬜":
-            b[i]="⭕"
-            score=minimax(b,False)
-            b[i]="⬜"
-            if score>best:
-                best=score
-                move=i
-    return move
-
-# 🎮 start
+# 🏁 start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("😏 Easy", callback_data="easy"),
-         InlineKeyboardButton("💀 Hard", callback_data="hard")]
+        [InlineKeyboardButton("👥 العب مع صاحبك", callback_data="create")]
     ])
-    await update.message.reply_text("🎮 اختر الصعوبة:", reply_markup=keyboard)
+    await update.message.reply_text("🎮 لعبة X O", reply_markup=keyboard)
 
-# اختيار الصعوبة
-async def difficulty(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# 📜 help
+async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "/start - بدء\n"
+        "/join CODE - دخول لعبة\n"
+        "/help - كل الأوامر"
+    )
+
+# 🔗 إنشاء غرفة
+async def create(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    context.user_data["mode"] = query.data
-    board = ["⬜"]*9
-    context.user_data["board"]=board
+    code = str(uuid.uuid4())[:6]
 
-    await query.edit_message_text(
-        f"🎮 بدأت اللعبة ({query.data})",
-        reply_markup=board_ui(board)
+    games[code] = {
+        "p1": query.from_user.id,
+        "p2": None,
+        "board": ["⬜"]*9,
+        "turn": query.from_user.id,
+        "active": True
+    }
+
+    await query.message.reply_text(
+        f"🔥 غرفة جاهزة!\n\n📌 الكود:\n{code}\n\nخلي صاحبك يكتب:\n/join {code}"
     )
 
-# اللعب
+# 🔗 دخول
+async def join(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("❌ اكتب الكود")
+        return
+
+    code = context.args[0]
+
+    if code not in games:
+        await update.message.reply_text("❌ كود غلط")
+        return
+
+    g = games[code]
+
+    if g["p2"]:
+        await update.message.reply_text("❌ الغرفة ممتلئة")
+        return
+
+    g["p2"] = update.message.from_user.id
+
+    await update.message.reply_text(
+        "🔥 بدأت اللعبة!",
+        reply_markup=board_ui(g["board"])
+    )
+
+# 🎮 اللعب
 async def play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    b = context.user_data["board"]
-    mode = context.user_data["mode"]
-    idx = int(query.data)
+    user = query.from_user.id
 
-    if b[idx]!="⬜": return
+    for code, g in games.items():
+        if not g["active"]:
+            return
 
-    b[idx]="❌"
+        if user in [g["p1"], g["p2"]]:
 
-    if win(b):
-        data=get_player(query.from_user.id)
-        data[str(query.from_user.id)]["points"]+=10
-        save(data)
-        await query.edit_message_text("🔥 فزت +10 نقاط", reply_markup=board_ui(b))
-        return
+            if g["turn"] != user:
+                return
 
-    if "⬜" not in b:
-        await query.edit_message_text("🤝 تعادل", reply_markup=board_ui(b))
-        return
+            idx = int(query.data)
 
-    # 🤖 البوت
-    if mode=="easy":
-        move=random.choice([i for i in range(9) if b[i]=="⬜"])
-    else:
-        move=best_move(b)
+            if g["board"][idx] != "⬜":
+                return
 
-    b[move]="⭕"
+            mark = "❌" if user == g["p1"] else "⭕"
+            g["board"][idx] = mark
 
-    if win(b):
-        await query.edit_message_text("💀 خسرت", reply_markup=board_ui(b))
-        return
+            # فحص الفوز
+            if win(g["board"]):
+                g["active"] = False
+                await query.message.reply_text(
+                    f"🏆 {mark} فاز!",
+                    reply_markup=board_ui(g["board"])
+                )
+                return
 
-    if "⬜" not in b:
-        await query.edit_message_text("🤝 تعادل", reply_markup=board_ui(b))
-        return
+            if "⬜" not in g["board"]:
+                g["active"] = False
+                await query.message.reply_text(
+                    "🤝 تعادل",
+                    reply_markup=board_ui(g["board"])
+                )
+                return
 
-    await query.edit_message_text("🎮 دورك", reply_markup=board_ui(b))
+            # تبديل الدور
+            g["turn"] = g["p2"] if user == g["p1"] else g["p1"]
 
-# 🏆 نقاط
-async def me(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    data=get_player(update.message.from_user.id)
-    pts=data[str(update.message.from_user.id)]["points"]
-    await update.message.reply_text(f"🏆 نقاطك: {pts}")
+            await query.message.reply_text(
+                "🎮 الدور التالي",
+                reply_markup=board_ui(g["board"])
+            )
+            return
 
 # تشغيل
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("me", me))
-app.add_handler(CallbackQueryHandler(difficulty, pattern="^(easy|hard)$"))
+app.add_handler(CommandHandler("help", help_cmd))
+app.add_handler(CommandHandler("join", join))
+app.add_handler(CallbackQueryHandler(create, pattern="create"))
 app.add_handler(CallbackQueryHandler(play))
 
 app.run_polling()
