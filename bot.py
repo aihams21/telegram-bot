@@ -6,7 +6,7 @@ import os
 from flask import Flask
 import threading
 
-TOKEN = os.getenv("7664216240:AAH1iDWhT5JhwpdPd-AnEEkSSwZLD5ZVin0")
+TOKEN = os.getenv("TOKEN")
 
 # 🌐 Flask (عشان Render)
 app_web = Flask(__name__)
