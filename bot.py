@@ -1,73 +1,81 @@
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 import random
 import datetime
+import os
+from flask import Flask
+import threading
 
-TOKEN = "7664216240:AAH1iDWhT5JhwpdPd-AnEEkSSwZLD5ZVin0"
+TOKEN = os.getenv("7664216240:AAH1iDWhT5JhwpdPd-AnEEkSSwZLD5ZVin0")
+
+# 🌐 Flask (عشان Render)
+app_web = Flask(__name__)
+
+@app_web.route('/')
+def home():
+    return "Bot is running 🔥"
+
+def run_web():
+    app_web.run(host='0.0.0.0', port=10000)
+
+# ❤️ ثابت
+def love(msg):
+    return msg + "\n\n❤️ بحبك مريم"
+
+# 💌 حب
+love_msgs = [
+    "💌 أنتِ أجمل شي بحياتي",
+    "💌 بدونك الحياة ما إلها طعم",
+    "💌 ضحكتك تسوى الدنيا",
+    "💌 والله إني بحبك حب مو طبيعي",
+    "💌 أنتِ الأمان ❤️"
+]
+
+# 🤖 AI بسيط
+def ai_reply(text):
+    text = text.lower()
+    if "كيفك" in text:
+        return "تمام دامك معي ❤️"
+    elif "بحبك" in text:
+        return "وأنا أموت فيك 😏❤️"
+    else:
+        return "احكي أكثر 😏"
+
 # /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔥 أهلاً في البوت الذكي 😏 اكتب /help")
+    await update.message.reply_text(love("🔥 أهلاً في بوت الحب 😏"))
 
-# /help
-async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = """
-🤖 الأوامر:
-
-/time ⏰ الوقت
-/joke 😂 نكتة
-/wisdom 🧠 حكمة
-/azkar 🕌 أذكار
-/game 🎮 لعبة رقم
-"""
-    await update.message.reply_text(msg)
-
-# /time
-async def time(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    now = datetime.datetime.now()
-    await update.message.reply_text(f"⏰ {now}")
+# /love
+async def love_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(love(random.choice(love_msgs)))
 
 # /joke
 async def joke(update: Update, context: ContextTypes.DEFAULT_TYPE):
     jokes = [
-        "😂 واحد غبي فتح محل سماه مغلق دائمًا",
-        "😂 واحد راح للدكتور قاله كل ما أشرب قهوة بوجعني عيني قاله شيل الملعقة",
-        "😂 واحد اتزوج مدرسه، صار كل يوم عنده امتحان"
+        "😂 واحد فتح محل سماه مغلق دائمًا",
+        "😂 واحد شرب قهوة ووجعته عينه طلع في ملعقة"
     ]
-    await update.message.reply_text(random.choice(jokes))
+    await update.message.reply_text(love(random.choice(jokes)))
 
-# /wisdom
-async def wisdom(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    wisdoms = [
-        "🧠 لا تؤجل عمل اليوم إلى الغد",
-        "🧠 من جد وجد ومن زرع حصد",
-        "🧠 النجاح يحتاج صبر"
-    ]
-    await update.message.reply_text(random.choice(wisdoms))
+# /dice
+async def dice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(love(f"🎲 {random.randint(1,6)}"))
 
-# /azkar
-async def azkar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    azkar_list = [
-        "🕌 سبحان الله",
-        "🕌 الحمد لله",
-        "🕌 لا إله إلا الله",
-        "🕌 الله أكبر"
-    ]
-    await update.message.reply_text(random.choice(azkar_list))
+# 🤖 رد على أي رسالة
+async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    reply = ai_reply(update.message.text)
+    await update.message.reply_text(love(reply))
 
-# 🎮 لعبة رقم
-async def game(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    num = random.randint(1, 10)
-    await update.message.reply_text(f"🎮 خمن رقم بين 1 و 10: {num}")
+# تشغيل Flask بالخلفية
+threading.Thread(target=run_web).start()
 
-# تشغيل
+# تشغيل البوت
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("help", help_cmd))
-app.add_handler(CommandHandler("time", time))
+app.add_handler(CommandHandler("love", love_cmd))
 app.add_handler(CommandHandler("joke", joke))
-app.add_handler(CommandHandler("wisdom", wisdom))
-app.add_handler(CommandHandler("azkar", azkar))
-app.add_handler(CommandHandler("game", game))
+app.add_handler(CommandHandler("dice", dice))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
 
 app.run_polling()
